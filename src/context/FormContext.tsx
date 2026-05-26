@@ -68,7 +68,7 @@ export function FormProvider({ children }: { children: ReactNode }) {
 
   const triggerSave = useCallback(() => {
     const email = formData.email;
-    if (!email || !emailVerified) return;
+    if (!email) return;
     const data = {
       formData,
       emailVerified,
@@ -80,7 +80,7 @@ export function FormProvider({ children }: { children: ReactNode }) {
   }, [formData, emailVerified, referralCode, referredBy, currentStep]);
 
   useEffect(() => {
-    if (!emailVerified || !formData.email) return;
+    if (!formData.email) return;
     const timer = setTimeout(triggerSave, 2000);
     return () => clearTimeout(timer);
   }, [formData, triggerSave, emailVerified, formData.email]);

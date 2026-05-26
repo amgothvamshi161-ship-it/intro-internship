@@ -1,17 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
-import { Mail, User, ChevronRight, ShieldCheck } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { Mail, User, ChevronRight } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
-import { OtpInput } from '../ui/OtpInput';
 import { Card } from '../ui/Card';
 import { useFormContext } from '../../context/FormContext';
 import { personalInfoSchema } from '../../utils/validation';
-import { sendEmailOtp, verifyEmailOtp, loadProgress } from '../../services/api';
+
 interface PersonalInfoProps {
   onNext: () => void;
 }
@@ -29,21 +27,12 @@ const sectionVariants = {
 };
 
 export function PersonalInfo({ onNext }: PersonalInfoProps) {
-  const { formData, updateFormData, emailVerified, setEmailVerified, setReferralCode, restoreProgress } = useFormContext();
-  const [emailOtpSent, setEmailOtpSent] = useState(false);
-  const [emailOtpValue, setEmailOtpValue] = useState('');
-  const [emailOtpError, setEmailOtpError] = useState('');
-  const [emailSending, setEmailSending] = useState(false);
-  const [emailVerifying, setEmailVerifying] = useState(false);
-  const [emailResendTimer, setEmailResendTimer] = useState(0);
-
+  const { formData, updateFormData, setEmailVerified } = useFormContext();
   const [submitting, setSubmitting] = useState(false);
 
   const {
     register,
     handleSubmit,
-    watch,
-    setValue,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(personalInfoSchema),
@@ -61,89 +50,10 @@ export function PersonalInfo({ onNext }: PersonalInfoProps) {
     },
   });
 
-  const watchEmail = watch('email');
-
-  useEffect(() => {
-    if (formData.email && !emailVerified) {
-      setValue('email', formData.email);
-    }
-  }, []);
-
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
-    if (emailResendTimer > 0) {
-      interval = setInterval(() => setEmailResendTimer((t) => t - 1), 1000);
-    }
-    return () => clearInterval(interval);
-  }, [emailResendTimer]);
-
-  const handleSendEmailOtp = useCallback(async () => {
-    const email = watchEmail;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.error('Enter a valid email address first');
-      return;
-    }
-    setEmailSending(true);
-    try {
-      await sendEmailOtp(email);
-      setEmailOtpSent(true);
-      setEmailResendTimer(60);
-      toast.success('OTP sent to your email');
-    } catch {
-      toast.error('Failed to send OTP. Please try again.');
-    } finally {
-      setEmailSending(false);
-    }
-  }, [watchEmail]);
-
-  const handleVerifyEmailOtp = useCallback(async () => {
-    if (emailOtpValue.length !== 6) {
-      setEmailOtpError('Enter the complete 6-digit OTP');
-      return;
-    }
-    setEmailVerifying(true);
-    setEmailOtpError('');
-    try {
-      const res = await verifyEmailOtp(watchEmail, emailOtpValue);
-      const code = res?.data?.data?.referralCode;
-      if (code) setReferralCode(code);
-      setEmailVerified(true);
-      toast.success('Email verified');
-
-      const emailAddr = watchEmail;
-      if (emailAddr) {
-        const savedRes = await loadProgress(emailAddr);
-        const savedData = savedRes?.data?.data;
-        if (savedData) {
-          restoreProgress(savedData);
-          setValue('fullName', savedData.formData.fullName || '');
-          setValue('mobileNumber', savedData.formData.mobileNumber || '');
-          setValue('whatsappNumber', savedData.formData.whatsappNumber || '');
-          setValue('email', savedData.formData.email || '');
-          setValue('gender', savedData.formData.gender || '');
-          setValue('dateOfBirth', savedData.formData.dateOfBirth || '');
-          setValue('address', savedData.formData.address || '');
-          setValue('city', savedData.formData.city || '');
-          setValue('state', savedData.formData.state || '');
-          setValue('pincode', savedData.formData.pincode || '');
-          if (savedData.referralCode) setReferralCode(savedData.referralCode);
-          toast.success('Your saved progress has been restored');
-        }
-      }
-    } catch {
-      setEmailOtpError('Invalid OTP. Please try again.');
-    } finally {
-      setEmailVerifying(false);
-    }
-  }, [emailOtpValue, watchEmail, setEmailVerified, setReferralCode, restoreProgress, setValue, watch]);
-
   const onSubmit = async (data: unknown) => {
-    if (!emailVerified) {
-      toast.error('Please verify your email address');
-      return;
-    }
     setSubmitting(true);
     updateFormData(data as typeof formData);
+    setEmailVerified(true);
     await new Promise((r) => setTimeout(r, 300));
     setSubmitting(false);
     onNext();
@@ -187,12 +97,12 @@ export function PersonalInfo({ onNext }: PersonalInfoProps) {
               <Mail className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-on-surface">Email Verification</h2>
-              <p className="text-sm text-on-surface-variant">Verify your email with OTP</p>
+              <h2 className="text-lg font-semibold text-on-surface">Email Address</h2>
+              <p className="text-sm text-on-surface-variant">Your email for communication</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-end">
+          <div className="grid grid-cols-1 md:grid-cols-1 gap-5">
             <Input
               label="Email Address"
               type="email"
@@ -200,36 +110,7 @@ export function PersonalInfo({ onNext }: PersonalInfoProps) {
               error={errors.email?.message}
               {...register('email')}
             />
-            <div className="flex items-end gap-3">
-              {!emailVerified ? (
-                <Button
-                  type="button"
-                  variant={emailOtpSent ? 'secondary' : 'primary'}
-                  onClick={handleSendEmailOtp}
-                  loading={emailSending}
-                  disabled={emailVerified}
-                  icon={<Mail className="w-4 h-4" />}
-                  className="w-full"
-                >
-                  {emailVerified ? 'Verified' : emailOtpSent ? emailResendTimer > 0 ? `Resend (${emailResendTimer}s)` : 'Resend OTP' : 'Send OTP'}
-                </Button>
-              ) : (
-                <div className="flex items-center gap-2 text-success text-sm font-medium w-full px-4 py-2.5 bg-success/10 rounded-xl">
-                  <ShieldCheck className="w-4 h-4" />
-                  Verified
-                </div>
-              )}
-            </div>
           </div>
-
-          {emailOtpSent && !emailVerified && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-6 space-y-4">
-              <OtpInput length={6} onComplete={setEmailOtpValue} error={emailOtpError} />
-              <Button type="button" variant="primary" onClick={handleVerifyEmailOtp} loading={emailVerifying} className="w-full">
-                Verify OTP
-              </Button>
-            </motion.div>
-          )}
         </Card>
       </motion.div>
 
